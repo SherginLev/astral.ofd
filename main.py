@@ -1,16 +1,37 @@
 import os
+import json
 import requests
+from kkt import Kkt
 from lxml import etree
 from datetime import datetime
 from xml.etree import ElementTree
 
+
 config_file = 'config.xml'
+organization_id = ''
 api_key = ''
+inn = ''
+all_kkt = []
+store = []
+
 
 if not os.path.exists(config_file):
     root_ = etree.Element('config')
     line_ = etree.SubElement(root_, 'api-key')
     line_.text = 'api-key'
+    line_ = etree.SubElement(root_, 'inn')
+    line_.text = '1234567890'
+    line_ = etree.SubElement(root_, 'organization_id')
+    line_.text = '12345'
+
+
+    mainLine_ = etree.SubElement(root_, 'all-kkt')
+    for i in range(2):
+        subLine_ = etree.SubElement(mainLine_, 'kkt')
+        line_ = etree.SubElement(subLine_, 'kkt_num')
+        line_.text = '123456789456123'
+        line_ = etree.SubElement(subLine_, 'kkt_name')
+        line_.text = 'kassa_' + str(i+1)
 
     xml_data = etree.tostring(root_, pretty_print=True, xml_declaration=True, encoding='utf-8').decode('utf-8')
 
@@ -18,19 +39,44 @@ if not os.path.exists(config_file):
         xml_config.write(xml_data)
         quit(f'Отсутствует конфигурационный файл: {config_file}.\nСоздан новый файл, заполните конфигурационные данные в файле: {config_file}.')
 
-with open(config_file) as f:
+with open(config_file, encoding='utf-8') as f:
     doc = ElementTree.parse(f)
     data = doc.getroot()
 
     api_key = data.find('./api-key').text
+    inn = data.find('./inn').text
+    organization_id = data.find('./organization_id').text
+    
+    for item in data.findall('./all-kkt/kkt'):
+        all_kkt.append(Kkt(kkt_num=int(item.find('kkt_num').text), kkt_name=item.find('kkt_name').text))
 
-org_id = ""
+# Запрос данных об организации
+if organization_id == '' or organization_id == None:
+    url = 'https://ofd.astralnalog.ru/api/v4.2/users.getMe'
+    params = dict(api_key=api_key)
+    res = requests.get(url, params=params)
 
-url = 'https://ofd.astralnalog.ru/api/v4.2/users.getMe'
-params = dict(api_key=api_key)
+    data = json.loads(res.text)
+    for item in data['result']['organization']:
+        if item.get('inn') == inn:
+            organization_id = item.get('id')
 
-url = 'https://ofd.astralnalog.ru/api/v4.2/kkt.alias'
-params = dict(api_key=api_key, organizationId=org_id)
+    #Внесение в config.xml файл id организации
+    tree = ElementTree.parse(config_file)
+    root = tree.getroot()
+    element = root.find('./organization_id')
+    element.text = organization_id
+    tree.write(config_file)
 
-res = requests.get(url, params=params)
-print(res.text)
+
+
+# for kkt in all_kkt:
+#     print(kkt.kkt_name)
+
+
+
+# url = 'https://ofd.astralnalog.ru/api/v4.2/kkt.alias'
+# params = dict(api_key=api_key, organizationId=org_id)
+#
+#
+# print(res.text)
