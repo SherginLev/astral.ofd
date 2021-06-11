@@ -2,12 +2,14 @@ import os
 import json
 import requests
 from kkt import Kkt
+from store import Store
 from lxml import etree
 from datetime import datetime
 from xml.etree import ElementTree
 
 
 config_file = 'config.xml'
+main_url = 'https://ofd.astralnalog.ru/api/v4.2/'
 organization_id = ''
 api_key = ''
 inn = ''
@@ -48,11 +50,11 @@ with open(config_file, encoding='utf-8') as f:
     organization_id = data.find('./organization_id').text
     
     for item in data.findall('./all-kkt/kkt'):
-        all_kkt.append(Kkt(kkt_num=int(item.find('kkt_num').text), kkt_name=item.find('kkt_name').text))
+        all_kkt.append(Kkt(kkt_num=str(item.find('kkt_num').text), kkt_name=item.find('kkt_name').text))
 
 # Запрос данных об организации
 if organization_id == '' or organization_id == None:
-    url = 'https://ofd.astralnalog.ru/api/v4.2/users.getMe'
+    url = main_url + 'users.getMe'
     params = dict(api_key=api_key)
     res = requests.get(url, params=params)
 
@@ -69,14 +71,28 @@ if organization_id == '' or organization_id == None:
     tree.write(config_file)
 
 
+url = main_url + 'kkt.alias'
+params = dict(api_key=api_key, organizationId=organization_id)
+res = requests.get(url, params=params)
+data = json.loads(res.text)
+for item in data['result']:
+    store.append(Store(id=item.get('id'), alias=item.get('alias')))
+
+
+for i in range(len(store)):
+    url = main_url + 'kkt.listByAlias'
+    params = dict(api_key=api_key, page=1, count='10', order='asc', organizationId=organization_id, aliasId=store[i].id)
+    res = requests.get(url, params=params)
+    data = json.loads(res.text)
+    for item in data['result']['kkts']:
+        for kkt in all_kkt:
+            if kkt.kkt_num == item.get('numberKKT'):
+                kkt.kkt_ofd_id = item.get('id')
+                print(kkt.kkt_ofd_id)
 
 # for kkt in all_kkt:
 #     print(kkt.kkt_name)
 
 
 
-# url = 'https://ofd.astralnalog.ru/api/v4.2/kkt.alias'
-# params = dict(api_key=api_key, organizationId=org_id)
-#
-#
-# print(res.text)
+
